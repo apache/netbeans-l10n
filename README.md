@@ -1,0 +1,1 @@
+# netbeans-l10n
