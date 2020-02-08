@@ -1,0 +1,5 @@
+/locale_*/release/
+/locale_*/build/
+/locale_*/dist/
+/locale_*/nbproject/private/
+/locale_*/nbproject/genfiles.properties
