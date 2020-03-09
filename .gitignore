@@ -3,3 +3,9 @@
 /locale_*/dist/
 /locale_*/nbproject/private/
 /locale_*/nbproject/genfiles.properties
+#
+/l10nantext/release/
+/l10nantext/build/
+/l10nantext/dist/
+/l10nantext/nbproject/private/
+/l10nantext/nbproject/genfiles.properties
