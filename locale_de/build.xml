@@ -38,8 +38,9 @@
 
         <!--<property name="locjhindexer.jhall" value="${main.dir}/${jh.jar}"/>-->
         <!--<property name="locales" value="ja,zh_CN,pt_BR"/>-->
-        <property name="locales" value="de"/>
-        <property name="dist.dir" location="locsrc"/>
+        <property name="locale" value="de"/>
+        <!--<property name="dist.dir" location="locsrc"/>-->
+        <property name="dist.dir" location="../netbeans-l10n-zip/src/${locale}"/>
         <property name="nbms.dist.dir" location="nbms"/>
         <property name="nbms.dir" location="../nbbuild/nbms"/>
         <property name="keystore" location=""/>
@@ -48,11 +49,11 @@
      
         <taskdef name="package-build" classname="org.netbeans.l10n.Package">
             <classpath>
-                <pathelement path="../l10nantext.jar"/>
+                <pathelement path="../l10nantext/dist/l10nantext.jar"/>
                 <!--<pathelement path="nbantext.jar"/>-->
             </classpath>
         </taskdef>
-        <package-build src="locsrc" locales="${locales}" dist="release/modules/locale" nbms="${nbms.dir}" nbmsDist="${nbms.dist.dir}" 
+        <package-build src="locsrc" locales="${locale}" dist="release/modules/locale" nbms="${nbms.dir}" nbmsDist="${nbms.dist.dir}" 
                        keystore="${keystore}" storepass="${storepass}" alias="${nbm_alias}">
             <classpath>
                 <pathelement location="nbantext.jar"/>
