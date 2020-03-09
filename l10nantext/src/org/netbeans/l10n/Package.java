@@ -31,8 +31,8 @@ import java.util.StringTokenizer;
 import java.util.Vector;
 import java.util.jar.JarFile;
 import java.util.zip.ZipEntry;
-import org.netbeans.nbbuild.XMLUtil;
-import org.netbeans.nbbuild.AutoUpdate;
+//import org.netbeans.nbbuild.XMLUtil;
+//import org.netbeans.nbbuild.AutoUpdate;
 import org.apache.tools.ant.BuildException;
 import org.apache.tools.ant.DirectoryScanner;
 import org.apache.tools.ant.Project;
@@ -123,190 +123,191 @@ public class Package extends Task {
             processLocale(loc);
         }
 
-        // Deal with NBMs creation
-        DirectoryScanner ds = new DirectoryScanner();
-        ds.setBasedir(nbmsLocation);
-        ds.setIncludes(new String[]{"**/*.nbm"});
-        ds.scan();
-        Mkdir mkdir = (Mkdir) getProject().createTask("mkdir");
-        Copy copy = (Copy) getProject().createTask("copy");
-        File tmpDir = new File("tmp");
-        tmpDir.mkdir();
-        for (String nbm : ds.getIncludedFiles()) {
-            String nbmName = nbm.substring(nbm.lastIndexOf(File.separator) + 1, nbm.lastIndexOf("."));
-            Vector<String> nbmFiles = nbms.get(nbmName);
-            if (nbmFiles == null) {
-                log("There is no localization content for NBM: " + nbmName);
-                continue;
-            }
-            String cluster = nbm.substring(0, nbm.indexOf(File.separator));
-            File destNbmDir = new File(nbmsDistDir, cluster);
-            File destNbmFile = new File(destNbmDir, nbmName + ".nbm");
-            if (!destNbmDir.isDirectory()) {
-                mkdir.setDir(destNbmDir);
-                mkdir.execute();
-            }
-            copy.setFile(new File(nbmsLocation, nbm));
-            copy.setTodir(destNbmDir);
-            copy.execute();
-
-            Jar jar = (Jar) getProject().createTask("jar");
-            jar.setUpdate(true);
-            jar.setDestFile(destNbmFile);
-            ZipFileSet zfs = new ZipFileSet();
-            zfs.setDir(new File(distDir, cluster));
-            zfs.setPrefix("netbeans");
-            zfs.appendIncludes(nbmFiles.toArray(new String[]{""}));
-            jar.addFileset(zfs);
-
-            //Process InfoXMLs
-            tokenizer = new StringTokenizer(locales.trim(), ", ");
-            while (tokenizer.hasMoreTokens()) {
-                String loc = tokenizer.nextToken();
-                try {
-                    File jarF = new File(distDir, cluster + File.separator + "modules" + File.separator + "locale" + File.separator + nbmName + "_" + loc + ".jar");
-                    if (!jarF.isFile()) {
-                        log("No " + loc + " localization for " + nbmName);
-                        continue;
-                    }
-                    //Find localized bundle
-                    JarFile jarFile = new JarFile(new File(distDir, cluster + File.separator + "modules" + File.separator + "locale" + File.separator + nbmName + "_" + loc + ".jar"));
-                    Properties p = new Properties();
-                    ZipEntry bundleentry = jarFile.getEntry(nbmName.replace('-', '/') + File.separator + "Bundle_" + loc + ".properties");
-                    if (bundleentry == null) {
-                        //Read it from the NBM and module's jar manifest
-                        JarFile nbmFile = new JarFile(destNbmFile);
-                        String jarEntryName = "netbeans/modules/" + nbmName + ".jar";
-                        ZipEntry ze = nbmFile.getEntry(jarEntryName);
-                        InputStream is;
-                        if(ze == null) {
-                            //NBM is packed with pack200
-                            ze = nbmFile.getEntry(jarEntryName + ".pack.gz");
-                            if(ze!=null) {
-                                File packedJar = File.createTempFile(nbmName, ".jar.pack.gz", tmpDir);
-                                File unpackedJar = File.createTempFile(nbmName, ".jar", tmpDir);
-                                unpackedJar.deleteOnExit();
-                                packedJar.deleteOnExit();
-                                InputStream fis = nbmFile.getInputStream(ze);
-                                BufferedOutputStream bof = new BufferedOutputStream(new FileOutputStream(packedJar));
-                                byte [] buffer = new byte [4096];
-                                int read = 0;
-                                while ((read = fis.read(buffer)) != -1) {
-                                    bof.write(buffer, 0, read);
-                                }
-                                bof.close();
-                                fis.close();
-                                AutoUpdate.unpack200(packedJar, unpackedJar);
-                                is = new FileInputStream(unpackedJar);
-                            } else {
-                                throw new BuildException("Cannot find neither " +
-                                        jarEntryName + ".pack.gz nor " +
-                                        jarEntryName + " entry in " + nbmFile.getName());
-                            }
-                        } else {
-                            is = nbmFile.getInputStream(ze);
-                        }
-                        
-                        File tmpJar = File.createTempFile("module", ".jar", tmpDir);
-                        BufferedOutputStream bof = new BufferedOutputStream(new FileOutputStream(tmpJar));
-                        int ch = 0;
-                        while ((ch = is.read()) != -1) {
-                            bof.write(ch);
-                        }
-                        bof.close();
-                        is.close();
-                        JarFile moduleJar = new JarFile(tmpJar);
-                        String bundlename = moduleJar.getManifest().getMainAttributes().getValue("OpenIDE-Module-Localizing-Bundle");
-                        String bfname = bundlename.substring(0, bundlename.lastIndexOf('.'));
-                        String bfext = bundlename.substring(bundlename.lastIndexOf('.'));
-                        bundlename = bfname + "_" + loc + bfext;
-                        bundleentry = jarFile.getEntry(bundlename);
-                        moduleJar.close();
-                        tmpJar.delete();
-                    }
-                    if (bundleentry != null) {
-                        InputStream is = jarFile.getInputStream(bundleentry);
-                        try {
-                            p.load(is);
-                        } finally {
-                            is.close();
-                        }
-                        // Open the original info XML
-                        JarFile nbmFile = new JarFile(destNbmFile);
-                        Document doc = XMLUtil.parse(new InputSource(nbmFile.getInputStream(nbmFile.getEntry("Info/info.xml"))), false, false, new ErrorCatcher(), null);
-                        Element manifest = (Element) doc.getElementsByTagName("manifest").item(0);
-
-                        // Now pick up attributes from the bundle and put them to the info.xml
-                        for (String attr : new String[]{"OpenIDE-Module-Name", "OpenIDE-Module-Display-Category", "OpenIDE-Module-Short-Description", "OpenIDE-Module-Long-Description"}) {
-                            String value = p.getProperty(attr);
-                            if (value != null) {
-                                manifest.setAttribute(attr, value);
-                            }
-                        }
-                        File infofile = new File(tmpDir, "info_" + loc + ".xml");
-                        OutputStream infoStream = new FileOutputStream(infofile);
-                        XMLUtil.write(doc, infoStream);
-                        infoStream.close();
-                        zfs = new ZipFileSet();
-                        zfs.setDir(tmpDir);
-                        zfs.setPrefix("Info/locale");
-                        zfs.appendIncludes(new String[]{"info_" + loc + ".xml"});
-                        jar.addFileset(zfs);
-                    } else {
-                        log("Can't find localizing bundle for " + nbmName);
-                    }
-                } catch (IOException ex) {
-                    log("Problems with reading localization bundles for " + loc + ", NBM: " + nbmName, ex, Project.MSG_WARN);
-
-                } catch (SAXException saxe) {
-                    log("Problem with creating localized info.xml for " + loc + ", NBM: " + nbmName, saxe, Project.MSG_WARN);
-                }
-
-            }
-            jar.execute();
-
-            if (keystore != null && storepass != null && alias != null) {
-                if (!keystore.isFile()) {
-                    continue;
-                }
-                SignJar signjar = (SignJar) getProject().createTask("signjar");
-                try { // Signatures changed in various Ant versions.
-
-                    try {
-                        SignJar.class.getMethod("setKeystore", File.class).invoke(signjar, keystore);
-                    } catch (NoSuchMethodException x) {
-                        SignJar.class.getMethod("setKeystore", String.class).invoke(signjar, keystore.getAbsolutePath());
-                    }
-                    try {
-                        SignJar.class.getMethod("setJar", File.class).invoke(signjar, destNbmFile);
-                    } catch (NoSuchMethodException x) {
-                        SignJar.class.getMethod("setJar", String.class).invoke(signjar, destNbmFile.getAbsolutePath());
-                    }
-                } catch (BuildException x) {
-                    throw x;
-                } catch (Exception x) {
-                    throw new BuildException(x);
-                }
-                signjar.setStorepass(storepass);
-                signjar.setAlias(alias);
-                signjar.setLocation(getLocation());
-                signjar.setMaxmemory(this.jarSignerMaxMemory);
-                signjar.init();
-                signjar.execute();
-            }
-        }
-        Delete delete = (Delete) getProject().createTask("delete");
-        delete.setDir(tmpDir);
-        delete.execute();
+//        // Deal with NBMs creation
+//        DirectoryScanner ds = new DirectoryScanner();
+//        ds.setBasedir(nbmsLocation);
+//        ds.setIncludes(new String[]{"**/*.nbm"});
+//        ds.scan();
+//        Mkdir mkdir = (Mkdir) getProject().createTask("mkdir");
+//        Copy copy = (Copy) getProject().createTask("copy");
+//        File tmpDir = new File("tmp");
+//        tmpDir.mkdir();
+//        for (String nbm : ds.getIncludedFiles()) {
+//            String nbmName = nbm.substring(nbm.lastIndexOf(File.separator) + 1, nbm.lastIndexOf("."));
+//            Vector<String> nbmFiles = nbms.get(nbmName);
+//            if (nbmFiles == null) {
+//                log("There is no localization content for NBM: " + nbmName);
+//                continue;
+//            }
+//            String cluster = nbm.substring(0, nbm.indexOf(File.separator));
+//            File destNbmDir = new File(nbmsDistDir, cluster);
+//            File destNbmFile = new File(destNbmDir, nbmName + ".nbm");
+//            if (!destNbmDir.isDirectory()) {
+//                mkdir.setDir(destNbmDir);
+//                mkdir.execute();
+//            }
+//            copy.setFile(new File(nbmsLocation, nbm));
+//            copy.setTodir(destNbmDir);
+//            copy.execute();
+//
+//            Jar jar = (Jar) getProject().createTask("jar");
+//            jar.setUpdate(true);
+//            jar.setDestFile(destNbmFile);
+//            ZipFileSet zfs = new ZipFileSet();
+//            zfs.setDir(new File(distDir, cluster));
+//            zfs.setPrefix("netbeans");
+//            zfs.appendIncludes(nbmFiles.toArray(new String[]{""}));
+//            jar.addFileset(zfs);
+//
+//            //Process InfoXMLs
+//            tokenizer = new StringTokenizer(locales.trim(), ", ");
+//            while (tokenizer.hasMoreTokens()) {
+//                String loc = tokenizer.nextToken();
+//                try {
+//                    File jarF = new File(distDir, cluster + File.separator + "modules" + File.separator + "locale" + File.separator + nbmName + "_" + loc + ".jar");
+//                    if (!jarF.isFile()) {
+//                        log("No " + loc + " localization for " + nbmName);
+//                        continue;
+//                    }
+//                    //Find localized bundle
+//                    JarFile jarFile = new JarFile(new File(distDir, cluster + File.separator + "modules" + File.separator + "locale" + File.separator + nbmName + "_" + loc + ".jar"));
+//                    Properties p = new Properties();
+//                    ZipEntry bundleentry = jarFile.getEntry(nbmName.replace('-', '/') + File.separator + "Bundle_" + loc + ".properties");
+//                    if (bundleentry == null) {
+//                        //Read it from the NBM and module's jar manifest
+//                        JarFile nbmFile = new JarFile(destNbmFile);
+//                        String jarEntryName = "netbeans/modules/" + nbmName + ".jar";
+//                        ZipEntry ze = nbmFile.getEntry(jarEntryName);
+//                        InputStream is;
+//                        if(ze == null) {
+//                            //NBM is packed with pack200
+//                            ze = nbmFile.getEntry(jarEntryName + ".pack.gz");
+//                            if(ze!=null) {
+//                                File packedJar = File.createTempFile(nbmName, ".jar.pack.gz", tmpDir);
+//                                File unpackedJar = File.createTempFile(nbmName, ".jar", tmpDir);
+//                                unpackedJar.deleteOnExit();
+//                                packedJar.deleteOnExit();
+//                                InputStream fis = nbmFile.getInputStream(ze);
+//                                BufferedOutputStream bof = new BufferedOutputStream(new FileOutputStream(packedJar));
+//                                byte [] buffer = new byte [4096];
+//                                int read = 0;
+//                                while ((read = fis.read(buffer)) != -1) {
+//                                    bof.write(buffer, 0, read);
+//                                }
+//                                bof.close();
+//                                fis.close();
+//                                AutoUpdate.unpack200(packedJar, unpackedJar);
+//                                is = new FileInputStream(unpackedJar);
+//                            } else {
+//                                throw new BuildException("Cannot find neither " +
+//                                        jarEntryName + ".pack.gz nor " +
+//                                        jarEntryName + " entry in " + nbmFile.getName());
+//                            }
+//                        } else {
+//                            is = nbmFile.getInputStream(ze);
+//                        }
+//                        
+//                        File tmpJar = File.createTempFile("module", ".jar", tmpDir);
+//                        BufferedOutputStream bof = new BufferedOutputStream(new FileOutputStream(tmpJar));
+//                        int ch = 0;
+//                        while ((ch = is.read()) != -1) {
+//                            bof.write(ch);
+//                        }
+//                        bof.close();
+//                        is.close();
+//                        JarFile moduleJar = new JarFile(tmpJar);
+//                        String bundlename = moduleJar.getManifest().getMainAttributes().getValue("OpenIDE-Module-Localizing-Bundle");
+//                        String bfname = bundlename.substring(0, bundlename.lastIndexOf('.'));
+//                        String bfext = bundlename.substring(bundlename.lastIndexOf('.'));
+//                        bundlename = bfname + "_" + loc + bfext;
+//                        bundleentry = jarFile.getEntry(bundlename);
+//                        moduleJar.close();
+//                        tmpJar.delete();
+//                    }
+//                    if (bundleentry != null) {
+//                        InputStream is = jarFile.getInputStream(bundleentry);
+//                        try {
+//                            p.load(is);
+//                        } finally {
+//                            is.close();
+//                        }
+//                        // Open the original info XML
+//                        JarFile nbmFile = new JarFile(destNbmFile);
+//                        Document doc = XMLUtil.parse(new InputSource(nbmFile.getInputStream(nbmFile.getEntry("Info/info.xml"))), false, false, new ErrorCatcher(), null);
+//                        Element manifest = (Element) doc.getElementsByTagName("manifest").item(0);
+//
+//                        // Now pick up attributes from the bundle and put them to the info.xml
+//                        for (String attr : new String[]{"OpenIDE-Module-Name", "OpenIDE-Module-Display-Category", "OpenIDE-Module-Short-Description", "OpenIDE-Module-Long-Description"}) {
+//                            String value = p.getProperty(attr);
+//                            if (value != null) {
+//                                manifest.setAttribute(attr, value);
+//                            }
+//                        }
+//                        File infofile = new File(tmpDir, "info_" + loc + ".xml");
+//                        OutputStream infoStream = new FileOutputStream(infofile);
+//                        XMLUtil.write(doc, infoStream);
+//                        infoStream.close();
+//                        zfs = new ZipFileSet();
+//                        zfs.setDir(tmpDir);
+//                        zfs.setPrefix("Info/locale");
+//                        zfs.appendIncludes(new String[]{"info_" + loc + ".xml"});
+//                        jar.addFileset(zfs);
+//                    } else {
+//                        log("Can't find localizing bundle for " + nbmName);
+//                    }
+//                } catch (IOException ex) {
+//                    log("Problems with reading localization bundles for " + loc + ", NBM: " + nbmName, ex, Project.MSG_WARN);
+//
+//                } catch (SAXException saxe) {
+//                    log("Problem with creating localized info.xml for " + loc + ", NBM: " + nbmName, saxe, Project.MSG_WARN);
+//                }
+//
+//            }
+//            jar.execute();
+//
+//            if (keystore != null && storepass != null && alias != null) {
+//                if (!keystore.isFile()) {
+//                    continue;
+//                }
+//                SignJar signjar = (SignJar) getProject().createTask("signjar");
+//                try { // Signatures changed in various Ant versions.
+//
+//                    try {
+//                        SignJar.class.getMethod("setKeystore", File.class).invoke(signjar, keystore);
+//                    } catch (NoSuchMethodException x) {
+//                        SignJar.class.getMethod("setKeystore", String.class).invoke(signjar, keystore.getAbsolutePath());
+//                    }
+//                    try {
+//                        SignJar.class.getMethod("setJar", File.class).invoke(signjar, destNbmFile);
+//                    } catch (NoSuchMethodException x) {
+//                        SignJar.class.getMethod("setJar", String.class).invoke(signjar, destNbmFile.getAbsolutePath());
+//                    }
+//                } catch (BuildException x) {
+//                    throw x;
+//                } catch (Exception x) {
+//                    throw new BuildException(x);
+//                }
+//                signjar.setStorepass(storepass);
+//                signjar.setAlias(alias);
+//                signjar.setLocation(getLocation());
+//                signjar.setMaxmemory(this.jarSignerMaxMemory);
+//                signjar.init();
+//                signjar.execute();
+//            }
+//        }
+//        Delete delete = (Delete) getProject().createTask("delete");
+//        delete.setDir(tmpDir);
+//        delete.execute();
     }
 
     void processLocale(String locale) throws BuildException {
         DirectoryScanner ds = new DirectoryScanner();
-        File baseSrcDir = new File(srcDir, locale);
-        if (!baseSrcDir.exists()) {
-            log("No files for locale: " + locale);
-            return;
-        }
+//        File baseSrcDir = new File(srcDir, locale);
+        File baseSrcDir = srcDir;
+//        if (!baseSrcDir.exists()) {
+//            log("No files for locale: " + locale);
+//            return;
+//        }
         ds.setBasedir(baseSrcDir);
         String[] includes = new String[]{"*/*/*", "*/*/ext/*", "*/*/ext/locale/*", "*/*/netbeans/*/*", "*/*/netbeans/*/locale/*", "*/*/netbeans/*/nblib/*", "*/*/netbeans/*/extra/*", "*/*/docs/*", "*/*/locale/*", "*/*/netbeans/config/*/*"};
         String[] excludes = new String[]{"other/**", "*/*/netbeans", "*/*/netbeans/*", "*/*/netbeans/*/locale", "*/*/netbeans/*/nblib", "*/*/netbeans/*/extra", "*/*/docs", "*/*/ext", "*/*/ext/locale", "*/*/locale", "*/*/netbeans/config/*"};
@@ -374,7 +375,8 @@ public class Package extends Task {
                 subPath += File.separator + "locale";
             }
             String jarFileName = name + "_" + locale + ".jar";
-            File distJarDir = new File(distDir.getAbsolutePath(), cluster + subPath);
+//            File distJarDir = new File(distDir.getAbsolutePath(), cluster + subPath);
+            File distJarDir = distDir;
             mkdir.setDir(distJarDir);
             mkdir.execute();
             jar.setBasedir(new File(baseSrcDir, dir));
