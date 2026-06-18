@@ -9,4 +9,6 @@
 /l10nantext/dist/
 /l10nantext/nbproject/private/
 /l10nantext/nbproject/genfiles.properties
-.DS_Store
+.idea/
+*.iml
+/locale_zh_CN/target/
