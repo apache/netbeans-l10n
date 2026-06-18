@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+         http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>org.apache.netbeans.l10n</groupId>
+    <artifactId>org-apache-netbeans-l10n-zh-CN</artifactId>
+    <version>1.0</version>
+    <packaging>nbm</packaging>
+
+    <name>NetBeans 简体中文语言包</name>
+    <url>https://netbeans.apache.org</url>
+    <description>Apache NetBeans 简体中文界面翻译语言包</description>
+
+    <properties>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <maven.compiler.source>11</maven.compiler.source>
+        <maven.compiler.target>11</maven.compiler.target>
+    </properties>
+
+    <build>
+        <plugins>
+            <!-- 配置 jar 插件使用 nbm:manifest 生成的 MF -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <configuration>
+                    <archive>
+                        <manifestFile>${project.build.outputDirectory}/META-INF/MANIFEST.MF</manifestFile>
+                    </archive>
+                </configuration>
+            </plugin>
+
+            <!-- 运行 LocaleJarGenerator 生成 locale JARs -->
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <version>3.5.0</version>
+                <executions>
+                    <execution>
+                        <id>generate-locale-jars</id>
+                        <phase>compile</phase>
+                        <goals><goal>java</goal></goals>
+                        <configuration>
+                            <mainClass>org.netbeans.l10n.LocaleJarGenerator</mainClass>
+                            <arguments>
+                                <argument>${project.basedir}/l10n</argument>
+                                <argument>zh_CN</argument>
+                                <argument>${project.build.directory}/l10n-jars</argument>
+                            </arguments>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!-- NBM 打包 -->
+            <plugin>
+                <groupId>org.apache.netbeans.utilities</groupId>
+                <artifactId>nbm-maven-plugin</artifactId>
+                <version>14.5</version>
+                <extensions>true</extensions>
+                <configuration>
+                    <codeNameBase>org.apache.netbeans.l10n.zh_CN</codeNameBase>
+                    <cluster>extra</cluster>
+                    <moduleType>normal</moduleType>
+                    <nbmResources>
+                        <nbmResource>
+                            <directory>${project.build.directory}/l10n-jars</directory>
+                            <targetPath>.</targetPath>
+                            <includes>
+                                <include>**/*.jar</include>
+                            </includes>
+                        </nbmResource>
+                    </nbmResources>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>
